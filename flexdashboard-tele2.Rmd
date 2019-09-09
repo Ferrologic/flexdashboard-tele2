@@ -1,0 +1,68 @@
+---
+title: "Title of dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(sparklyr)
+library(ggplot2)
+library(plotly)
+
+sc <- spark_connect(master = "local")
+spark_read_csv(sc,"transactions", "data/tele2-transactions.csv")
+
+trans <- tbl(sc, "transactions") 
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Title Chart A
+
+```{r}
+DT::datatable(trans %>% 
+	group_by(pc_priceplan_nm) %>% 
+	summarise(mean_rrpu = mean(rrpu, na.rm = T)) %>% 
+	arrange(-mean_rrpu) %>% 
+	collect())
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Title Chart B
+
+```{r}
+p <- trans %>% 
+	filter(!is.na(su_contract_dt)) %>% 
+	mutate(datum = as.Date(su_contract_dt), month = month(su_contract_dt)) %>% 
+	group_by(month) %>% 
+	summarise(antal = n()) %>% 
+	collect() %>% 
+	ggplot(aes(x = as.factor(month), y = antal, group = 1)) +
+	geom_point() +
+	geom_line(alpha = 0.5)
+
+ggplotly(p)
+```
+
+### Title Chart C
+
+```{r}
+trans %>% 
+	filter(!is.na(bas_buck_size)) %>% 
+	group_by(bas_buck_size) %>% 
+	summarise(percent_increase = sum(increasednosub) / n()) %>% 
+	arrange(-percent_increase) %>% 
+	collect() %>% 
+	ggplot(aes(x = reorder(bas_buck_size, percent_increase), y = percent_increase)) +
+	geom_col() +
+	coord_flip() +
+	scale_y_continuous(labels = scales::percent)
+```
+
